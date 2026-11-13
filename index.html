@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff7ef">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="큐브이유식">
+  <title>큐브 이유식</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>🧊 큐브 이유식</h1>
+    <button id="btnSettings" class="icon-btn" aria-label="설정">⚙️</button>
+  </header>
+
+  <main>
+    <section id="alerts" class="alerts" hidden></section>
+
+    <section>
+      <h2 class="section-title">🍚 베이스죽</h2>
+      <div id="gridBase" class="grid"></div>
+    </section>
+
+    <section>
+      <h2 class="section-title">🥕 토핑</h2>
+      <div id="gridTopping" class="grid"></div>
+    </section>
+
+    <p class="legend">
+      <span class="dot ok"></span>여유 <span class="dot warn"></span>곧 폐기 <span class="dot bad"></span>폐기일 지남
+    </p>
+  </main>
+
+  <!-- 바텀시트 -->
+  <div id="backdrop" class="backdrop" hidden></div>
+  <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div id="sheetBody"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
