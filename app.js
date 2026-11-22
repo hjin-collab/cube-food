@@ -19,7 +19,7 @@ const STORAGE_KEY = 'cube-baby-food-v1';
 
 function defaultState() {
   return {
-    settings: { keepDays: 14, alertDays: 3 },
+    settings: { keepDays: 14, alertDays: 3, lowStock: 2 },
     ingredients: DEFAULT_INGREDIENTS.map(([name, type, emoji], i) => ({ id: 'i' + i, name, type, emoji })),
     batches: [], // { id, ingId, made: 'YYYY-MM-DD', count, eaten }
   };
@@ -46,6 +46,11 @@ function migrate() {
     const rice = state.ingredients.find((i) => i.name === '현미');
     if (rice) rice.allergy = true;
     state.done.allergyV2 = true;
+    changed = true;
+  }
+  // v4: 남은 개수 알림 — 기본 2개 이하 (기존 설정값은 유지)
+  if (state.settings.lowStock === undefined) {
+    state.settings.lowStock = 2;
     changed = true;
   }
   if (changed) save();
@@ -136,19 +141,33 @@ function renderAllergyBar() {
   bar.innerHTML = `⚠️ <b>알레르기 주의</b> · ${list.map((i) => escapeHtml(i.name)).join(', ')}`;
 }
 
+function totalLeft(ingId) { return activeBatches(ingId).reduce((s, b) => s + remaining(b), 0); }
+
 function renderAlerts() {
   const box = document.getElementById('alerts');
   const items = state.batches
     .filter((b) => remaining(b) > 0 && statusOf(b) !== 'ok' && ingById(b.ingId))
     .sort((a, b) => a.made.localeCompare(b.made));
-  if (!items.length) { box.hidden = true; return; }
+  const low = state.settings.lowStock;
+  const lowItems = low > 0
+    ? state.ingredients.map((i) => [i, totalLeft(i.id)]).filter(([, n]) => n > 0 && n <= low)
+    : [];
+  if (!items.length && !lowItems.length) { box.hidden = true; return; }
   box.hidden = false;
-  box.innerHTML = `<h3>⏰ 폐기 임박 큐브</h3><ul>${items.map((b) => {
-    const left = daysLeft(b);
-    const ing = ingById(b.ingId);
-    const msg = left < 0 ? `폐기일(${fmt(expireDate(b))}) 지남` : left === 0 ? '오늘 폐기' : `${left}일 후(${fmt(expireDate(b))}) 폐기`;
-    return `<li class="${left < 0 ? 'bad' : ''}">${escapeHtml(ing.name)} ${remaining(b)}개 — ${msg}</li>`;
-  }).join('')}</ul>`;
+  let html = '';
+  if (items.length) {
+    html += `<h3>⏰ 폐기 임박 큐브</h3><ul>${items.map((b) => {
+      const left = daysLeft(b);
+      const ing = ingById(b.ingId);
+      const msg = left < 0 ? `폐기일(${fmt(expireDate(b))}) 지남` : left === 0 ? '오늘 폐기' : `${left}일 후(${fmt(expireDate(b))}) 폐기`;
+      return `<li class="${left < 0 ? 'bad' : ''}">${escapeHtml(ing.name)} ${remaining(b)}개 — ${msg}</li>`;
+    }).join('')}</ul>`;
+  }
+  if (lowItems.length) {
+    html += `<h3${items.length ? ' style="margin-top:10px"' : ''}>🧊 큐브가 얼마 안 남았어요</h3><ul>${lowItems.map(([i, n]) =>
+      `<li>${escapeHtml(i.name)} ${n}개 남음</li>`).join('')}</ul>`;
+  }
+  box.innerHTML = html;
 }
 
 /* ================= 바텀시트 ================= */
@@ -275,6 +294,8 @@ function openSettings() {
       <h3>보관 / 알림</h3>
       <div class="row">보관 기간 <input type="number" id="keepDays" min="1" max="60" value="${s.keepDays}" style="width:70px"> 일</div>
       <div class="row">폐기 <input type="number" id="alertDays" min="0" max="14" value="${s.alertDays}" style="width:70px"> 일 전부터 알림</div>
+      <div class="row">남은 큐브 <input type="number" id="lowStock" min="0" max="20" value="${s.lowStock}" style="width:70px"> 개 이하일 때 알림</div>
+      <p class="note">0으로 하면 남은 개수 알림을 끕니다.</p>
 
       <h3>재료 추가</h3>
       <div class="row">
@@ -301,6 +322,7 @@ function openSettings() {
   };
   document.getElementById('keepDays').addEventListener('change', () => { s.keepDays = num('keepDays', 1, 60, 14); save(); });
   document.getElementById('alertDays').addEventListener('change', () => { s.alertDays = num('alertDays', 0, 14, 3); save(); });
+  document.getElementById('lowStock').addEventListener('change', () => { s.lowStock = num('lowStock', 0, 20, 2); save(); });
   document.getElementById('btnAdd').addEventListener('click', () => {
     const name = document.getElementById('newName').value.trim();
     if (!name) return alert('재료 이름을 입력해주세요.');
