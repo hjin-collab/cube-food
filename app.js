@@ -34,6 +34,21 @@ function load() {
   } catch (e) {
     state = defaultState();
   }
+  migrate();
+}
+
+// 기존 기록은 그대로 두고, 새 기능에 필요한 값만 보충합니다. (각 작업은 한 번만 실행)
+function migrate() {
+  state.done = state.done || {};
+  let changed = false;
+  // v2: 알레르기 기능 추가 — 현미를 알레르기로 표시
+  if (!state.done.allergyV2) {
+    const rice = state.ingredients.find((i) => i.name === '현미');
+    if (rice) rice.allergy = true;
+    state.done.allergyV2 = true;
+    changed = true;
+  }
+  if (changed) save();
 }
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { alert('저장에 실패했어요.'); }
@@ -85,6 +100,7 @@ function iconHtml(ing) {
 
 /* ================= 메인 화면 ================= */
 function render() {
+  renderAllergyBar();
   renderAlerts();
   for (const type of ['base', 'topping']) {
     const grid = document.getElementById(type === 'base' ? 'gridBase' : 'gridTopping');
@@ -100,15 +116,24 @@ function render() {
         dday = ddayText(daysLeft(oldest));
       }
       const el = document.createElement('button');
-      el.className = `ing ${cls}`;
+      el.className = `ing ${cls}${ing.allergy ? ' allergy' : ''}`;
       el.innerHTML = `
-        <div class="circle">${iconHtml(ing)}${total ? `<span class="badge">${total}</span>` : ''}</div>
+        <div class="circle">${iconHtml(ing)}${total ? `<span class="badge">${total}</span>` : ''}${ing.allergy ? '<span class="allergy-mark" aria-label="알레르기">!</span>' : ''}</div>
         <div class="ing-name">${escapeHtml(ing.name)}</div>
         <div class="ing-dday">${dday}</div>`;
       el.addEventListener('click', () => openIngredient(ing.id));
       grid.appendChild(el);
     }
   }
+}
+
+// 알레르기 재료는 항상 화면 맨 위에 고정 표시
+function renderAllergyBar() {
+  const bar = document.getElementById('allergyBar');
+  const list = state.ingredients.filter((i) => i.allergy);
+  if (!list.length) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.innerHTML = `⚠️ <b>알레르기 주의</b> · ${list.map((i) => escapeHtml(i.name)).join(', ')}`;
 }
 
 function renderAlerts() {
@@ -146,6 +171,10 @@ function openIngredient(ingId, showPicker) {
   const pick = showPicker || bs.length === 0;
 
   let html = `<h2>${ing.emoji ? escapeHtml(ing.emoji) : ''} ${escapeHtml(ing.name)}</h2>`;
+  html += ing.allergy
+    ? `<div class="allergy-box">⚠️ 알레르기 반응이 있었던 재료예요
+         <button class="btn small" id="btnAllergy">알레르기 해제</button></div>`
+    : `<button class="btn small allergy-set" id="btnAllergy">⚠️ 알레르기로 표시</button>`;
   if (bs.length) {
     const total = bs.reduce((s, b) => s + remaining(b), 0);
     html += `<p class="sub">남은 큐브 <b>${total}개</b> · 먹은 큐브를 눌러서 체크하세요</p>`;
@@ -185,6 +214,14 @@ function openIngredient(ingId, showPicker) {
   html += `<button class="btn block" id="btnClose">닫기</button>`;
   openSheet(html);
 
+  document.getElementById('btnAllergy').addEventListener('click', () => {
+    const msg = ing.allergy
+      ? `'${ing.name}'의 알레르기 표시를 해제할까요?`
+      : `'${ing.name}'을(를) 알레르기 재료로 표시할까요?\n화면 맨 위와 아이콘에 경고가 표시돼요.`;
+    if (!confirm(msg)) return;
+    ing.allergy = !ing.allergy;
+    save(); render(); openIngredient(ingId);
+  });
   sheetBody.querySelectorAll('.cube').forEach((el) =>
     el.addEventListener('click', () => toggleCube(el.dataset.batch, Number(el.dataset.idx), ingId)));
   sheetBody.querySelectorAll('[data-del]').forEach((el) =>
