@@ -333,6 +333,14 @@ render();
 // 앱을 다시 열었을 때(날짜가 바뀌었을 수 있으니) 화면 갱신
 document.addEventListener('visibilitychange', () => { if (!document.hidden && sheet.hidden) render(); });
 
+// 새 버전이 올라오면 앱을 열 때 확인하고 자동으로 새로고침 (기록은 그대로 유지됨)
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloaded) { reloaded = true; location.reload(); }
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
 }
