@@ -102,8 +102,8 @@ function fmt(s) { const d = parseDate(s); return `${d.getMonth() + 1}/${d.getDat
 
 /* ================= 계산 ================= */
 const remaining = (b) => b.count - b.eaten;
-// 먹을 수 있는 마지막 날: 만든 날이 1일차 → 보관기간(14)일차까지 (예: 11/25 만들면 12/8까지)
-const expireDate = (b) => addDays(b.made, state.settings.keepDays - 1);
+// 폐기일 = 만든 날 + 보관기간(14일). 폐기일 당일까지 먹음 (예: 11/25 만들면 12/9까지)
+const expireDate = (b) => addDays(b.made, state.settings.keepDays);
 const daysLeft = (b) => diffDays(expireDate(b), todayStr());
 
 function statusOf(b) {
@@ -243,7 +243,7 @@ function openIngredient(ingId, showPicker) {
             ${Array.from({ length: b.count }, (_, i) =>
               `<button class="cube ${i < b.eaten ? 'eaten' : ''}" data-batch="${b.id}" data-idx="${i}" aria-label="큐브 ${i + 1}"></button>`).join('')}
           </div>
-          <p class="hint">${fmt(expireDate(b))}까지 먹을 수 있어요 (만든 날 1일차 · ${state.settings.keepDays}일차까지)</p>
+          <p class="hint">폐기일 ${fmt(expireDate(b))} · 당일까지 먹어요</p>
           <div class="batch-actions">
             <button class="btn small danger" data-del="${b.id}">${st === 'bad' ? '🗑 폐기' : '삭제'}</button>
           </div>
@@ -326,7 +326,7 @@ function openSettings() {
       <h2>⚙️ 설정</h2>
       <h3>보관 / 알림</h3>
       <div class="row">보관 기간 <input type="number" id="keepDays" min="1" max="60" value="${s.keepDays}" style="width:70px"> 일</div>
-      <p class="note">만든 날이 1일차예요. 14일이면 11/25에 만든 큐브는 12/8까지 먹어요.</p>
+      <p class="note">폐기일 = 만든 날 + 보관 기간이고, 폐기일 당일까지 먹어요. (14일이면 11/25에 만든 큐브는 12/9까지)</p>
       <div class="row">폐기 <input type="number" id="alertDays" min="0" max="14" value="${s.alertDays}" style="width:70px"> 일 전부터 알림</div>
       <div class="row">남은 큐브 <input type="number" id="lowStock" min="0" max="20" value="${s.lowStock}" style="width:70px"> 개 이하일 때 알림</div>
       <p class="note">0으로 하면 남은 개수 알림을 끕니다.</p>
