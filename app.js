@@ -133,7 +133,6 @@ function iconHtml(ing) {
 /* ================= 메인 화면 ================= */
 function render() {
   renderAllergyBar();
-  renderToday();
   renderAlerts();
   const GRID = { base: 'gridBase', topping: 'gridTopping', snack: 'gridSnack' };
   for (const type of Object.keys(GRID)) {

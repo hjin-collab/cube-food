@@ -80,30 +80,3 @@ function simulate(pool, from, to) {
   }
   return { short, blocked, noPlan };
 }
-
-/* ---- 메인 화면: 오늘 식단 카드 ---- */
-function renderToday() {
-  const box = document.getElementById('todayCard');
-  const today = todayStr();
-  const d = dOf(today);
-  const p = planDay(d);
-  let html = `<div class="today-head">📅 오늘 <b>D+${d}</b> <span class="sub-inline">${fmt(today)}</span></div>`;
-  if (!p) {
-    html += `<p class="note">식단표 범위(D+${PLAN_FIRST}~${PLAN_LAST})가 아니에요.</p>`;
-  } else {
-    const label = ['아침', '점심'];
-    p.m.forEach((m, k) => {
-      const chips = mealCubes(m).map((c) => {
-        const ing = ingByName(c.name);
-        const n = ing ? totalLeft(ing.id) : 0;
-        const cls = ing && ing.allergy ? 'chip bad' : n === 0 ? 'chip empty' : 'chip';
-        const title = c.sub ? `${escapeHtml(c.name)}<small>(${escapeHtml(c.orig)} 대체)</small>` : escapeHtml(c.name);
-        return `<span class="${cls}">${title} <b>${ing ? n : '?'}</b></span>`;
-      }).join('');
-      html += `<div class="meal"><span class="meal-label">${label[k]}</span><div class="chips">${chips}</div></div>`;
-    });
-    if (p.s) html += `<div class="meal"><span class="meal-label">간식</span><div class="chips"><span class="chip plain">${escapeHtml(p.s)}</span></div></div>`;
-    html += '<p class="note">숫자는 남은 큐브 수예요. 회색은 큐브가 없는 재료예요.</p>';
-  }
-  box.innerHTML = html;
-}
