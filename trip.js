@@ -1,74 +1,35 @@
 'use strict';
 /* ================= 여행 계획 탭 =================
- * 가정: 큐브는 만든 날 + 보관기간(기본 14일)에 폐기, 여행 중에는 집 큐브를 먹지 않음.
- * 출발 전까지 하루 먹는 양만큼, 폐기일이 빠른 큐브부터 먹는다고 계산합니다.
- * (app.js의 state, 날짜 함수들을 그대로 사용)
+ * 뿐이 식단표(plan.js)대로 먹는다고 보고 계산합니다.
+ * - 출발 전까지: 날짜별 식단의 큐브를 폐기일 빠른 묶음부터 사용
+ * - 여행 중: 집에 있는 큐브는 먹지 않음
+ * - 돌아온 뒤 보관기간(기본 14일) 동안: 남은 큐브를 쓰고, 모자라는 재료를 필요한 날짜순으로 추천
  */
-const CATS = [
-  { key: 'base', label: '베이스죽', def: 2 },
-  { key: 'topping', label: '토핑', def: 4 },
-  { key: 'snack', label: '간식', def: 0 },
-];
-
 function tripState() {
   if (!state.trip) state.trip = {};
-  const t = state.trip;
-  if (!t.rate) t.rate = {};
-  for (const c of CATS) if (t.rate[c.key] === undefined) t.rate[c.key] = c.def;
-  return t;
+  return state.trip;
 }
+const dLabel = (date) => `D+${dOf(date)}(${fmt(date)})`;
 
-/* ---- 계산 ---- */
-function planTrip(start, end) {
+function planTrip(start, end, skipToday) {
   const today = todayStr();
   const keep = state.settings.keepDays;
-  const t = tripState();
-  const daysBefore = Math.max(0, diffDays(start, today)); // 오늘 ~ 출발 전날
-  const result = { daysBefore, tripDays: diffDays(end, start) + 1, cats: {} };
+  const pool = cubePool();
+  const from = skipToday ? addDays(today, 1) : today;
 
-  for (const c of CATS) {
-    const rate = t.rate[c.key] || 0;
-    const pool = state.batches
-      .filter((b) => remaining(b) > 0)
-      .map((b) => ({ b, ing: ingById(b.ingId), left: remaining(b), eat: 0, exp: expireDate(b) }))
-      .filter((x) => x.ing && x.ing.type === c.key)
-      .sort((x, y) => x.exp.localeCompare(y.exp));
-    const edible = pool.filter((x) => !x.ing.allergy);
-
-    // 출발 전까지 하루씩 먹기 (폐기일 전날까지 먹을 수 있음, 폐기일 빠른 순)
-    let short = 0;
-    for (let i = 0; i < daysBefore; i++) {
-      const day = addDays(today, i);
-      let need = rate;
-      for (const x of edible) {
-        if (!need) break;
-        if (x.left > 0 && day < x.exp) { const n = Math.min(need, x.left); x.left -= n; x.eat += n; need -= n; }
-      }
-      short += need;
-    }
-
-    const eatBefore = edible.filter((x) => x.eat > 0);
-    const toss = pool.filter((x) => x.left > 0 && x.exp <= end);    // 돌아오기 전 폐기일 도래
-    const keepAfter = pool.filter((x) => x.left > 0 && x.exp > end); // 돌아와서도 사용 가능
-    const leftAfter = keepAfter.filter((x) => !x.ing.allergy).reduce((s, x) => s + x.left, 0);
-
-    // 돌아와서 만들 재료 추천: 예전에 만든 적 있고(알레르기 제외) 돌아왔을 때 남는 게 없는 재료, 최근에 만든 순
-    const stillHave = new Set(keepAfter.map((x) => x.ing.id));
-    const lastMade = {};
-    for (const b of state.batches) {
-      const ing = ingById(b.ingId);
-      if (ing && ing.type === c.key && !ing.allergy && (!lastMade[ing.id] || b.made > lastMade[ing.id])) lastMade[ing.id] = b.made;
-    }
-    const remake = Object.keys(lastMade)
-      .filter((id) => !stillHave.has(id))
-      .sort((a, b) => lastMade[b].localeCompare(lastMade[a]))
-      .map(ingById);
-
-    result.cats[c.key] = { ...c, rate, eatBefore, toss, keepAfter, leftAfter, short, remake,
-      safeMakeDate: addDays(end, -keep + 1), // 이 날 이후 만든 큐브는 돌아온 뒤에도 사용 가능
-      coverDays: rate > 0 ? Math.floor(leftAfter / rate) : null };
-  }
-  return result;
+  // 1) 출발 전
+  const before = from < start ? simulate(pool, from, addDays(start, -1)) : { short: {}, blocked: {}, noPlan: 0 };
+  const eatBefore = pool.filter((x) => x.used > 0).map((x) => ({ ...x, n: x.used }));
+  // 2) 버리게 될 것 (돌아오는 날까지 폐기일이 오는 남은 큐브)
+  const toss = pool.filter((x) => x.left > 0 && x.exp <= end);
+  // 3) 돌아와서 남는 것
+  const keepAfter = pool.filter((x) => x.left > 0 && x.exp > end).map((x) => ({ ...x, n: x.left }));
+  pool.forEach((x) => { x.used = 0; });
+  // 4) 돌아온 다음 날부터 보관기간 동안 식단대로 → 부족한 재료 = 만들 순서
+  const afterFrom = addDays(end, 1), afterTo = addDays(end, keep);
+  const after = simulate(pool, afterFrom, afterTo);
+  const unused = pool.filter((x) => x.left > 0 && x.exp > end && x.exp <= afterTo); // 식단에 안 쓰여 폐기
+  return { before, eatBefore, toss, keepAfter, after, unused, afterFrom, afterTo, from };
 }
 
 /* ---- 화면 ---- */
@@ -81,20 +42,15 @@ function renderTrip() {
       <h3>✈️ 여행 일정</h3>
       <div class="row"><label>출발일</label><input type="date" id="tripStart" min="${today}" value="${t.start || ''}"></div>
       <div class="row"><label>돌아오는 날</label><input type="date" id="tripEnd" min="${today}" value="${t.end || ''}"></div>
-      <h3 style="margin-top:14px">🥄 하루에 먹는 큐브 수</h3>
-      ${CATS.map((c) => `<div class="row"><label>${c.label}</label>
-        <input type="number" class="rate" data-cat="${c.key}" min="0" max="20" value="${t.rate[c.key]}" style="width:70px"> 개</div>`).join('')}
-      <p class="note">보관 ${state.settings.keepDays}일 기준 · 여행 중에는 집에 있는 큐브를 먹지 않는다고 계산해요.</p>
+      <label class="row" style="gap:8px"><input type="checkbox" id="skipToday" ${t.skipToday === today ? 'checked' : ''}> 오늘 끼니는 이미 먹었어요 (오늘 제외)</label>
+      <p class="note">뿐이 식단표(D+${PLAN_FIRST}~${PLAN_LAST})대로 먹고, 여행 중에는 집 큐브를 먹지 않는다고 계산해요. 보관 ${state.settings.keepDays}일 기준.</p>
     </div>
     <div id="tripResult"></div>`;
 
   const update = () => {
     t.start = document.getElementById('tripStart').value;
     t.end = document.getElementById('tripEnd').value;
-    view.querySelectorAll('.rate').forEach((el) => {
-      const v = parseInt(el.value, 10);
-      t.rate[el.dataset.cat] = Number.isFinite(v) ? Math.min(20, Math.max(0, v)) : 0;
-    });
+    t.skipToday = document.getElementById('skipToday').checked ? today : '';
     save();
     renderTripResult();
   };
@@ -110,68 +66,63 @@ function renderTripResult() {
   if (t.end < t.start) { box.innerHTML = '<p class="note" style="text-align:center;color:var(--bad)">돌아오는 날이 출발일보다 빨라요.</p>'; return; }
   if (t.end < today) { box.innerHTML = '<p class="note" style="text-align:center">이미 지난 여행이에요.</p>'; return; }
 
-  const r = planTrip(t.start, t.end);
-  const cats = CATS.map((c) => r.cats[c.key]);
-  const name = (x) => `${x.ing.emoji ? escapeHtml(x.ing.emoji) + ' ' : ''}${escapeHtml(x.ing.name)}`;
+  const r = planTrip(t.start, t.end, t.skipToday === today);
+  const nm = (ing) => `${ing.emoji ? escapeHtml(ing.emoji) + ' ' : ''}${escapeHtml(ing.name)}`;
+  const nmByName = (name) => { const i = ingByName(name); return i ? nm(i) : escapeHtml(name); };
   const li = (left, right) => `<li><span>${left}</span><span class="meta">${right}</span></li>`;
+  const sortShort = (o) => Object.values(o).sort((a, b) => a.first.localeCompare(b.first) || b.count - a.count);
+  const days = diffDays(t.end, t.start) + 1;
+
   let html = `<div class="card trip-summary">
-    📅 ${fmt(t.start)} ~ ${fmt(t.end)} · <b>${r.tripDays}일</b> 여행<br>
-    ${r.daysBefore > 0 ? `출발까지 <b>${r.daysBefore}일</b> 남았어요` : '오늘 출발이에요'}</div>`;
+    📅 출발 <b>${dLabel(t.start)}</b> → 돌아옴 <b>${dLabel(t.end)}</b> · ${days}일<br>
+    ${diffDays(t.start, today) > 0 ? `출발까지 <b>${diffDays(t.start, today)}일</b> 남았어요` : '오늘 출발이에요'}</div>`;
 
-  // 1. 출발 전에 먼저 먹을 것
-  const eat = cats.flatMap((c) => c.eatBefore.map((x) => ({ ...x, cat: c.label })));
-  if (eat.length) {
-    html += `<div class="card eat"><h3>🍽 출발 전까지 먼저 먹을 것</h3><ul class="plan-list">${
-      eat.sort((a, b) => a.exp.localeCompare(b.exp)).map((x) =>
-        li(`${name(x)} <b>${x.eat}개</b><span class="pill">${x.cat}</span>`, `폐기일 ${fmt(x.exp)}`)).join('')
-    }</ul><p class="note">폐기일이 빠른 순서예요. 이 순서대로 먹으면 버리는 양이 가장 적어요.</p></div>`;
+  // 1. 출발 전 먹을 것
+  if (r.eatBefore.length) {
+    html += `<div class="card eat"><h3>🍽 출발 전까지 식단대로 먹을 큐브</h3><ul class="plan-list">${
+      r.eatBefore.map((x) => li(`${nm(x.ing)} <b>${x.n}개</b>`, `폐기일 ${fmt(x.exp)}`)).join('')}</ul></div>`;
   }
-
-  // 2. 여행 중 폐기될 것
-  const toss = cats.flatMap((c) => c.toss);
+  // 2. 출발 전 부족
+  const sb = sortShort(r.before.short);
+  const safe = addDays(t.end, -state.settings.keepDays + 1); // 이 날 이후 만든 큐브는 돌아온 뒤에도 사용 가능
+  if (sb.length) {
+    html += `<div class="card make"><h3>🧑‍🍳 출발 전에 모자라는 것</h3><ul class="plan-list">${
+      sb.map((s) => li(`${nmByName(s.name)} <b>${s.count}개</b>`, `${dLabel(s.first)}부터 필요`)).join('')}</ul>
+      <p class="note">${safe <= today ? '지금 만들면 돌아와서도 남은 큐브를 쓸 수 있어요.' : `${fmt(safe)} 이후에 만든 큐브는 돌아와서도 쓸 수 있어요.`}
+      출발 전에 넉넉히 만들면 아래 '돌아와서 만들 순서'에서 그만큼 줄어요.</p></div>`;
+  }
+  // 3. 버리게 될 것
+  const toss = [...r.toss.map((x) => ({ x, why: x.exp <= t.start ? '출발 전 폐기일' : '여행 중 폐기일' })),
+    ...r.unused.map((x) => ({ x, why: '돌아와서 폐기일 전까지 다 못 씀' }))];
   if (toss.length) {
     html += `<div class="card toss"><h3>🗑 다 못 먹고 버리게 될 것</h3><ul class="plan-list">${
-      toss.map((x) => li(`${name(x)} <b>${x.left}개</b>${x.ing.allergy ? '<span class="pill">알레르기·먹이지 않음</span>' : ''}`,
-        x.exp <= t.start ? `${fmt(x.exp)} 폐기 (출발 전)` : `${fmt(x.exp)} 폐기 (여행 중)`)).join('')
-    }</ul><p class="note">하루 먹는 양을 늘리거나, 여행에 가져가면 줄일 수 있어요.</p></div>`;
+      toss.map(({ x, why }) => li(`${nm(x.ing)} <b>${x.left}개</b>`, `${fmt(x.exp)} · ${why}`)).join('')}</ul>
+      <p class="note">식단표 외에 더 먹이거나, 여행에 가져가면 줄일 수 있어요.</p></div>`;
   }
+  // 4. 돌아와서 남는 것
+  if (r.keepAfter.length) {
+    html += `<div class="card keep"><h3>✅ 돌아와서도 남는 큐브</h3><ul class="plan-list">${
+      r.keepAfter.map((x) => li(`${nm(x.ing)} <b>${x.n}개</b>`, `${fmt(x.exp)}까지`)).join('')}</ul></div>`;
+  }
+  // 5. 돌아와서 만들 순서
+  const sa = sortShort(r.after.short);
+  html += `<div class="card make"><h3>🧑‍🍳 돌아와서 만들 순서</h3>`;
+  if (sa.length) {
+    html += `<ul class="plan-list">${sa.map((s, k) =>
+      li(`${k + 1}. ${nmByName(s.name)} <b>${s.count}개</b>`, `${dLabel(s.first)}까지`)).join('')}</ul>
+      <p class="note">${fmt(r.afterFrom)}~${fmt(r.afterTo)}(돌아온 뒤 ${state.settings.keepDays}일) 식단에 필요한 개수예요. 날짜가 빠른 재료부터 만드세요.</p>`;
+  } else {
+    html += '<p class="advice">돌아온 뒤 2주 동안 남은 큐브로 충분해요.</p>';
+  }
+  html += '</div>';
 
-  // 3. 돌아와서도 쓸 수 있는 것
-  const keepAfter = cats.flatMap((c) => c.keepAfter);
-  if (keepAfter.length) {
-    html += `<div class="card keep"><h3>✅ 돌아와서도 먹을 수 있는 것</h3><ul class="plan-list">${
-      keepAfter.map((x) => li(`${name(x)} <b>${x.left}개</b>${x.ing.allergy ? '<span class="pill">알레르기·먹이지 않음</span>' : ''}`,
-        `${fmt(x.exp)}까지 (돌아와서 ${diffDays(x.exp, t.end)}일)`)).join('')
-    }</ul></div>`;
+  // 알림: 알레르기로 막힌 재료, 식단표 범위 밖
+  const blocked = [...new Set([...Object.keys(r.before.blocked), ...Object.keys(r.after.blocked)])];
+  if (blocked.length) {
+    html += `<div class="card toss"><p class="advice">⚠️ 식단표에 알레르기 재료 <b>${blocked.map(escapeHtml).join(', ')}</b>이(가) 있어요. ⚙️ 설정 → 대체 재료에서 바꿀 재료를 정해 주세요.</p></div>`;
   }
-
-  if (!eat.length && !toss.length && !keepAfter.length) {
-    html += '<div class="card"><p class="advice">지금 남아 있는 큐브가 없어요.</p></div>';
-  }
-
-  // 4. 만들기 추천
-  let make = '';
-  for (const c of cats) {
-    if (!c.rate && !c.remake.length) continue;
-    let s = '';
-    if (c.short > 0) {
-      s += `<p class="advice">• 출발 전까지 <b>${c.label} ${c.short}개</b>가 부족해요. `;
-      s += c.safeMakeDate <= today
-        ? '지금 만들어도 돌아온 뒤까지 쓸 수 있어요.</p>'
-        : `<b>${fmt(c.safeMakeDate)} 이후</b>에 만들면 돌아와서도 쓸 수 있고, 그 전에 만들면 출발 전에 먹을 만큼만 만드세요.</p>`;
-    }
-    if (c.rate > 0) {
-      if (c.leftAfter <= 0) s += `<p class="advice">• 돌아오면 ${c.label}이 없어요. <b>돌아온 날(${fmt(t.end)}) 바로</b> 만들어야 해요.</p>`;
-      else s += `<p class="advice">• 돌아와서 ${c.label} ${c.leftAfter}개 → 약 ${c.coverDays}일분. <b>${fmt(addDays(t.end, c.coverDays))}까지</b> 새로 만드세요.</p>`;
-    }
-    if (c.remake.length) {
-      s += `<p class="advice">• 다시 만들 ${c.label}: ${c.remake.slice(0, 6).map((i, n) => `${n + 1}. ${escapeHtml(i.name)}`).join(' · ')}</p>`;
-    }
-    if (s) make += `<h3 style="font-size:14px;margin:10px 0 2px">${c.label}</h3>${s}`;
-  }
-  if (make) {
-    html += `<div class="card make"><h3>🧑‍🍳 만들기 추천</h3>${make}
-      <p class="note">'다시 만들 재료'는 예전에 만든 적 있고 돌아왔을 때 남는 게 없는 재료예요. 최근에 만든 순서이고, 알레르기 재료는 빠져 있어요.</p></div>`;
+  if (r.before.noPlan + r.after.noPlan > 0) {
+    html += `<p class="note" style="text-align:center">식단표 범위(D+${PLAN_FIRST}~${PLAN_LAST}) 밖의 날짜 ${r.before.noPlan + r.after.noPlan}일은 계산에서 빠졌어요.</p>`;
   }
   box.innerHTML = html;
 }

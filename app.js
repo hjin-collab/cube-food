@@ -53,6 +53,33 @@ function migrate() {
     state.settings.lowStock = 2;
     changed = true;
   }
+  // v7: 식단표 연동 — D+ 기준, 현미→보리 대체, 식단표에 나오는 재료 추가 (이미 있는 재료·기록은 그대로)
+  if (!state.done.planV7) {
+    if (!state.settings.dAnchor) state.settings.dAnchor = { date: '2026-11-23', d: 218 };
+    if (!state.settings.subs) state.settings.subs = { '현미': '보리' };
+    const has = (n) => state.ingredients.some((i) => i.name === n);
+    const NEW = [
+      ['보리', 'base', '🌾'], ['흑미', 'base', ''], ['수수', 'base', ''],
+      ['완두콩', 'topping', '🫛'], ['아욱', 'topping', ''], ['적채', 'topping', ''], ['비트', 'topping', ''],
+      ['토마토', 'topping', '🍅'], ['새송이버섯', 'topping', '🍄'], ['배추', 'topping', '🥬'],
+      ['연근', 'topping', ''], ['양송이버섯', 'topping', '🍄'],
+      ['쌀죽', 'base', '🍚'], ['오트밀', 'base', '🥣'], ['퀴노아', 'base', '🌱'], ['현미', 'base', '🌾'],
+      ['소고기', 'topping', '🥩'], ['닭고기', 'topping', '🍗'], ['흰살생선', 'topping', '🐟'], ['두부', 'topping', ''],
+      ['달걀노른자', 'topping', '🥚'], ['애호박', 'topping', '🥒'], ['브로콜리', 'topping', '🥦'], ['당근', 'topping', '🥕'],
+      ['단호박', 'topping', '🎃'], ['고구마', 'topping', '🍠'], ['양배추', 'topping', '🥬'], ['시금치', 'topping', '🌿'],
+      ['청경채', 'topping', '🥬'], ['비타민', 'topping', '🍃'], ['무', 'topping', ''], ['양파', 'topping', '🧅'], ['사과', 'topping', '🍎'],
+    ];
+    // 식단표 이름('쌀오트밀', '달걀' 등)으로 이미 등록한 재료가 있으면 추가하지 않음
+    const alt = { '오트밀': '쌀오트밀', '퀴노아': '쌀퀴노아', '현미': '쌀현미', '보리': '쌀보리', '흑미': '쌀흑미', '수수': '쌀수수',
+      '달걀노른자': '달걀', '흰살생선': '생선', '새송이버섯': '새송이' };
+    let n = 0;
+    for (const [name, type, emoji] of NEW) {
+      if (name === '쌀죽' || has(name) || (alt[name] && has(alt[name]))) continue;
+      state.ingredients.push({ id: 'p' + Date.now() + '_' + n++, name, type, emoji });
+    }
+    state.done.planV7 = true;
+    changed = true;
+  }
   if (changed) save();
 }
 function save() {
@@ -106,6 +133,7 @@ function iconHtml(ing) {
 /* ================= 메인 화면 ================= */
 function render() {
   renderAllergyBar();
+  renderToday();
   renderAlerts();
   const GRID = { base: 'gridBase', topping: 'gridTopping', snack: 'gridSnack' };
   for (const type of Object.keys(GRID)) {
@@ -316,6 +344,21 @@ function openSettings() {
       <h3>토핑</h3>${list('topping')}
       <h3>간식</h3>${list('snack') || '<p class="note">아직 없어요</p>'}
 
+      <h3>📅 식단표 (뿐이 중기)</h3>
+      <div class="row">오늘은 D+ <input type="number" id="dToday" min="0" max="999" value="${dOf(todayStr())}" style="width:80px"></div>
+      <p class="note">내일부터는 자동으로 하루씩 올라가요.</p>
+      <h3>🔁 대체 재료</h3>
+      <p class="note">식단표 재료 대신 다른 재료를 쓸 때 (예: 현미 알레르기 → 보리)</p>
+      ${Object.entries(s.subs || {}).map(([a, b]) => `
+        <div class="list-item"><span class="grow">${escapeHtml(a)} → <b>${escapeHtml(b)}</b></span>
+        <button class="btn small danger" data-unsub="${escapeHtml(a)}">해제</button></div>`).join('') || '<p class="note">없음</p>'}
+      <div class="row">
+        <select id="subFrom" style="flex:1;min-width:0">${planNames().filter((n) => !(s.subs || {})[n]).map((n) => `<option>${escapeHtml(n)}</option>`).join('')}</select>
+        →
+        <select id="subTo" style="flex:1;min-width:0">${state.ingredients.map((i) => `<option>${escapeHtml(i.name)}</option>`).join('')}</select>
+      </div>
+      <button class="btn primary small" id="btnSub">대체 추가</button>
+
       <h3>초기화</h3>
       <p class="note">큐브 기록과 재료 목록을 처음 상태로 되돌립니다.</p>
       <button class="btn danger block" id="btnReset">전체 초기화</button>
@@ -347,9 +390,21 @@ function openSettings() {
     state.batches = state.batches.filter((b) => b.ingId !== ing.id);
     save(); openSettings();
   }));
+  document.getElementById('dToday').addEventListener('change', () => {
+    const v = parseInt(document.getElementById('dToday').value, 10);
+    if (Number.isFinite(v)) { s.dAnchor = { date: todayStr(), d: v }; save(); }
+  });
+  document.getElementById('btnSub').addEventListener('click', () => {
+    const from = document.getElementById('subFrom').value, to = document.getElementById('subTo').value;
+    if (!from || !to || from === to) return;
+    s.subs = s.subs || {}; s.subs[from] = to; save(); openSettings();
+  });
+  sheetBody.querySelectorAll('[data-unsub]').forEach((el) => el.addEventListener('click', () => {
+    delete s.subs[el.dataset.unsub]; save(); openSettings();
+  }));
   document.getElementById('btnReset').addEventListener('click', () => {
     if (!confirm('정말 모든 기록을 지우고 초기화할까요?')) return;
-    state = defaultState(); save(); closeSheet();
+    state = defaultState(); migrate(); save(); closeSheet();
   });
   document.getElementById('btnClose').addEventListener('click', closeSheet);
 }

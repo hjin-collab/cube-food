@@ -172,3 +172,19 @@ main { padding: 0 16px 32px; max-width: 640px; margin: 0 auto; }
 .advice { font-size: 14px; line-height: 1.6; margin: 6px 0; }
 .advice b { color: var(--text); }
 .pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: #f3ebe4; color: var(--sub); margin-left: 4px; }
+
+/* 오늘 식단 */
+.today { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; margin: 4px 0 10px; }
+.today-head { font-size: 15px; margin-bottom: 6px; }
+.today-head b { color: var(--accent); font-size: 17px; }
+.sub-inline { color: var(--sub); font-size: 13px; margin-left: 4px; }
+.meal { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+.meal-label { flex: 0 0 34px; font-size: 13px; font-weight: 700; color: var(--sub); padding-top: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-size: 13px; padding: 3px 9px; border-radius: 12px; background: #eef7ee; border: 1px solid #c8e6c9; }
+.chip b { color: #2e7d32; margin-left: 2px; }
+.chip small { color: var(--sub); font-size: 11px; margin-left: 2px; }
+.chip.empty { background: #f3f0ed; border-color: var(--line); color: var(--sub); }
+.chip.empty b { color: var(--bad); }
+.chip.bad { background: #ffebee; border-color: #ef9a9a; color: #c62828; }
+.chip.plain { background: #fff6e5; border-color: #ffe0a3; }
