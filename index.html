@@ -19,9 +19,13 @@
     <h1>🧊 큐브 이유식</h1>
     <button id="btnSettings" class="icon-btn" aria-label="설정">⚙️</button>
     <div id="allergyBar" class="allergy-bar" hidden></div>
+    <nav class="tabs">
+      <button class="tab active" data-view="viewCubes">🧊 큐브</button>
+      <button class="tab" data-view="viewTrip">✈️ 여행 계획</button>
+    </nav>
   </header>
 
-  <main>
+  <main id="viewCubes">
     <section id="alerts" class="alerts" hidden></section>
 
     <section>
@@ -44,6 +48,8 @@
     </p>
   </main>
 
+  <main id="viewTrip" hidden></main>
+
   <!-- 바텀시트 -->
   <div id="backdrop" class="backdrop" hidden></div>
   <div id="sheet" class="sheet" hidden role="dialog" aria-modal="true">
@@ -52,5 +58,6 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="trip.js"></script>
 </body>
 </html>
