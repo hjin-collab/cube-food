@@ -1,7 +1,7 @@
 'use strict';
 /* ================= 여행 계획 탭 =================
  * 뿐이 식단표(plan.js)대로 먹는다고 보고 계산합니다.
- * - 출발 전까지: 날짜별 식단의 큐브를 기한이 빠른 묶음부터 사용 (폐기일 = 만든 날 + 14일, 당일까지 먹음)
+ * - 출발 전까지: 날짜별 식단의 큐브를 기한이 빠른 묶음부터 사용 (기한 = 만든 날 1일차 ~ 14일차)
  * - 여행 중: 집에 있는 큐브는 먹지 않음
  * - 돌아온 뒤 보관기간(기본 14일) 동안: 남은 큐브를 쓰고, 모자라는 재료를 필요한 날짜순으로 추천
  */
@@ -10,13 +10,13 @@ function tripState() {
   return state.trip;
 }
 
-// 만드는 날(make)에 만든 큐브는 (make ~ make+보관기간) 동안 먹을 수 있음 (폐기일 당일 포함).
+// 만드는 날(make)에 만든 큐브는 (make ~ make+보관기간-1) 동안 먹을 수 있음.
 // 만드는 날 전까지는 지금 있는 큐브로 식단대로 먹고, 그 뒤 모자라는 개수를 계산.
 // 그 기간 중 여행 날짜를 빼고 식단대로 먹어 보고, 기존 큐브로 모자라는 개수 = 오늘 만들면 되는 개수
 function planTrip(start, end, skipToday, make) {
   const today = todayStr();
   const from = skipToday ? addDays(today, 1) : today;
-  const lastUse = addDays(make, state.settings.keepDays); // 만든 큐브의 폐기일 (당일까지 먹음)
+  const lastUse = addDays(make, state.settings.keepDays - 1); // 만든 큐브를 먹을 수 있는 마지막 날
   const pool = cubePool();
   const none = { short: {}, blocked: {} };
   const max = (a, b) => (a > b ? a : b), min = (a, b) => (a < b ? a : b);
