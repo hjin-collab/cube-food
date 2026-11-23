@@ -107,9 +107,14 @@ function iconHtml(ing) {
 function render() {
   renderAllergyBar();
   renderAlerts();
-  for (const type of ['base', 'topping']) {
-    const grid = document.getElementById(type === 'base' ? 'gridBase' : 'gridTopping');
+  const GRID = { base: 'gridBase', topping: 'gridTopping', snack: 'gridSnack' };
+  for (const type of Object.keys(GRID)) {
+    const grid = document.getElementById(GRID[type]);
     grid.innerHTML = '';
+    if (!state.ingredients.some((i) => i.type === type)) {
+      grid.innerHTML = '<p class="empty-hint">⚙️ 설정 → 재료 추가에서 채워 주세요</p>';
+      continue;
+    }
     for (const ing of state.ingredients.filter((i) => i.type === type)) {
       const bs = activeBatches(ing.id);
       const total = bs.reduce((s, b) => s + remaining(b), 0);
@@ -303,12 +308,13 @@ function openSettings() {
         <input type="text" id="newName" placeholder="재료 이름" style="flex:1;min-width:0">
       </div>
       <div class="row">
-        <select id="newType"><option value="topping">토핑</option><option value="base">베이스죽</option></select>
+        <select id="newType"><option value="topping">토핑</option><option value="base">베이스죽</option><option value="snack">간식</option></select>
         <button class="btn primary small" id="btnAdd">추가</button>
       </div>
 
       <h3>베이스죽</h3>${list('base')}
       <h3>토핑</h3>${list('topping')}
+      <h3>간식</h3>${list('snack') || '<p class="note">아직 없어요</p>'}
 
       <h3>초기화</h3>
       <p class="note">큐브 기록과 재료 목록을 처음 상태로 되돌립니다.</p>

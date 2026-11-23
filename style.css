@@ -147,3 +147,4 @@ main { padding: 0 16px 32px; max-width: 640px; margin: 0 auto; }
 .settings h3 { font-size: 15px; margin: 20px 0 6px; }
 .note { font-size: 12px; color: var(--sub); line-height: 1.5; }
 .ing.allergy.none .circle { opacity: 1; }
+.empty-hint { grid-column: 1 / -1; margin: 0; padding: 14px; text-align: center; font-size: 13px; color: var(--sub); border: 1.5px dashed var(--line); border-radius: 14px; }
