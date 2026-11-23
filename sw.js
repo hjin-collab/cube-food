@@ -1,6 +1,6 @@
 // 오프라인에서도 열리도록 앱 파일을 캐시합니다.
 // 앱 파일을 수정한 뒤 배포할 때는 VERSION 숫자를 올려주세요.
-const VERSION = 'v9';
+const VERSION = 'v10';
 const CACHE = 'cube-app-' + VERSION;
 const FILES = ['./', 'index.html', 'style.css', 'plan.js', 'meal.js', 'app.js', 'trip.js', 'manifest.json', 'icons/icon-180.png', 'icons/icon-192.png'];
 
