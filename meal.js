@@ -53,11 +53,11 @@ function cubePool() {
     .filter((x) => x.ing)
     .sort((x, y) => x.exp.localeCompare(y.exp));
 }
-// day에 재료 1개 먹기 (폐기일 빠른 것부터, 폐기일 당일은 사용 안 함). 성공하면 true
+// day에 재료 1개 먹기 (기한 빠른 것부터, 마지막 날 당일까지 사용). 성공하면 true
 function takeCube(pool, name, day) {
   const ing = ingByName(name);
   if (!ing) return false;
-  const x = pool.find((p) => p.ing.id === ing.id && p.left > 0 && day < p.exp);
+  const x = pool.find((p) => p.ing.id === ing.id && p.left > 0 && day <= p.exp);
   if (!x) return false;
   x.left--; x.used++;
   return true;
